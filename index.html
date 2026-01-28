@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wedstrijd Tracker</title>
+
+<style>
+body {
+  font-family: Arial, sans-serif;
+  background: #111;
+  color: #fff;
+  margin: 0;
+  padding: 10px;
+}
+
+h1 {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.match {
+  border-radius: 12px;
+  padding: 15px;
+  margin-bottom: 12px;
+}
+
+.green { background: #1e7f43; }
+.red { background: #8b1e1e; }
+
+.teams {
+  font-weight: bold;
+  font-size: 18px;
+}
+
+.scenario {
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+.score {
+  margin-top: 8px;
+  font-size: 16px;
+}
+</style>
+</head>
+
+<body>
+<h1>Live Scenario Tracker</h1>
+<div id="matches"></div>
+
+<script>
+const API_KEY = "HIER_JE_API_SLEUTEL";
+const API_URL = "https://api.football-data.org/v4/matches";
+
+const scenarios = [
+  { home: "PSV", away: "Bayern Munich", type: "lose", team: "PSV" },
+  { home: "Athletic Club", away: "Sporting CP", type: "lose", team: "Athletic Club" },
+  { home: "Napoli", away: "Chelsea FC", type: "lose", team: "Napoli" },
+  { home: "FC Copenhagen", away: "FC Barcelona", type: "lose", team: "FC Copenhagen" },
+  { home: "Club Brugge", away: "Olympique Marseille", type: "notWin", team: "Club Brugge" },
+  { home: "Bodø/Glimt", away: "Atletico Madrid", type: "notWin", team: "Bodø/Glimt" },
+  { home: "SL Benfica", away: "Real Madrid", type: "notWin", team: "SL Benfica" },
+  { home: "Pafos FC", away: "Slavia Prague", type: "notWin", team: "Pafos FC" },
+  { home: "Union Saint-Gilloise", away: "Atalanta", type: "notWin", team: "Union Saint-Gilloise" }
+];
+
+async function loadMatches() {
+  const res = await fetch(API_URL, {
+    headers: { "X-Auth-Token": API_KEY }
+  });
+  const data = await res.json();
+
+  const container = document.getElementById("matches");
+  container.innerHTML = "";
+
+  scenarios.forEach(s => {
+    const match = data.matches.find(m =>
+      m.homeTeam.name === s.home &&
+      m.awayTeam.name === s.away
+    );
+
+    if (!match) return;
+
+    const homeGoals = match.score.fullTime.home ?? match.score.halfTime.home ?? 0;
+    const awayGoals = match.score.fullTime.away ?? match.score.halfTime.away ?? 0;
+
+    let teamGoals, oppGoals;
+    if (s.team === match.homeTeam.name) {
+      teamGoals = homeGoals;
+      oppGoals = awayGoals;
+    } else {
+      teamGoals = awayGoals;
+      oppGoals = homeGoals;
+    }
+
+    let success =
+      s.type === "lose" ? teamGoals < oppGoals : teamGoals <= oppGoals;
+
+    const div = document.createElement("div");
+    div.className = "match " + (success ? "green" : "red");
+
+    div.innerHTML = `
+      <div class="teams">${match.homeTeam.name} – ${match.awayTeam.name}</div>
+      <div class="scenario">Scenario: ${s.team} ${s.type === "lose" ? "verliest" : "wint niet"}</div>
+      <div class="score">Stand: ${homeGoals} – ${awayGoals}</div>
+    `;
+
+    container.appendChild(div);
+  });
+}
+
+loadMatches();
+</script>
+</body>
+</html>
