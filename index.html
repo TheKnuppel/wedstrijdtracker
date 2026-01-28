@@ -3,15 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Wedstrijd Tracker</title>
+<title>Live Wedstrijd Tracker</title>
 
 <style>
 body {
   font-family: Arial, sans-serif;
-  background: #111;
+  background: #0f0f0f;
   color: #fff;
   margin: 0;
-  padding: 10px;
+  padding: 12px;
 }
 
 h1 {
@@ -20,27 +20,35 @@ h1 {
 }
 
 .match {
-  border-radius: 12px;
-  padding: 15px;
-  margin-bottom: 12px;
+  border-radius: 14px;
+  padding: 16px;
+  margin-bottom: 14px;
 }
 
-.green { background: #1e7f43; }
-.red { background: #8b1e1e; }
+.green { background: #1f7a44; }
+.red { background: #8c1d18; }
+.neutral { background: #333; }
 
 .teams {
-  font-weight: bold;
   font-size: 18px;
+  font-weight: bold;
 }
 
 .scenario {
   font-size: 14px;
   opacity: 0.9;
+  margin-top: 4px;
 }
 
 .score {
-  margin-top: 8px;
   font-size: 16px;
+  margin-top: 10px;
+}
+
+.status {
+  font-size: 13px;
+  opacity: 0.8;
+  margin-top: 4px;
 }
 </style>
 </head>
@@ -51,7 +59,10 @@ h1 {
 
 <script>
 const API_KEY = "76505b8dd065466bad41dc42d86f9192";
-const API_URL = "https://api.football-data.org/v4/matches";
+
+// Automatische datum van vandaag
+const today = new Date().toISOString().split("T")[0];
+const API_URL = `https://api.football-data.org/v4/matches?dateFrom=${today}&dateTo=${today}`;
 
 const scenarios = [
   { home: "PSV", away: "Bayern Munich", type: "lose", team: "PSV" },
@@ -70,7 +81,6 @@ async function loadMatches() {
     headers: { "X-Auth-Token": API_KEY }
   });
   const data = await res.json();
-
   const container = document.getElementById("matches");
   container.innerHTML = "";
 
@@ -79,39 +89,78 @@ async function loadMatches() {
       m.homeTeam.name === s.home &&
       m.awayTeam.name === s.away
     );
-
     if (!match) return;
 
-    const homeGoals = match.score.fullTime.home ?? match.score.halfTime.home ?? 0;
-    const awayGoals = match.score.fullTime.away ?? match.score.halfTime.away ?? 0;
+    const homeGoals = match.score.fullTime.home;
+    const awayGoals = match.score.fullTime.away;
 
-    let teamGoals, oppGoals;
-    if (s.team === match.homeTeam.name) {
-      teamGoals = homeGoals;
-      oppGoals = awayGoals;
-    } else {
-      teamGoals = awayGoals;
-      oppGoals = homeGoals;
+    let statusText = "Nog niet gestart";
+    let className = "neutral";
+
+    if (homeGoals !== null && awayGoals !== null) {
+      let teamGoals, oppGoals;
+      if (s.team === match.homeTeam.name) {
+        teamGoals = homeGoals;
+        oppGoals = awayGoals;
+      } else {
+        teamGoals = awayGoals;
+        oppGoals = homeGoals;
+      }
+
+      const success =
+        s.type === "lose"
+          ? teamGoals < oppGoals
+          : teamGoals <= oppGoals;
+
+      className = success ? "green" : "red";
+      statusText = `Stand: ${homeGoals} – ${awayGoals}`;
     }
 
-    let success =
-      s.type === "lose" ? teamGoals < oppGoals : teamGoals <= oppGoals;
-
     const div = document.createElement("div");
-    div.className = "match " + (success ? "green" : "red");
+    div.className = `match ${className}`;
 
     div.innerHTML = `
       <div class="teams">${match.homeTeam.name} – ${match.awayTeam.name}</div>
       <div class="scenario">Scenario: ${s.team} ${s.type === "lose" ? "verliest" : "wint niet"}</div>
-      <div class="score">Stand: ${homeGoals} – ${awayGoals}</div>
+      <div class="score">${statusText}</div>
+      <div class="status">${match.status}</div>
     `;
-
     container.appendChild(div);
   });
 }
 
-loadMatches();
+// Functie voor automatische laadtijden
+function scheduleRefresh() {
+  const now = new Date();
+  const firstLoadTime = new Date();
+  firstLoadTime.setHours(13,30,0,0); // eerste load om 13:30
+
+  const refreshStartTime = new Date();
+  refreshStartTime.setHours(21,0,0,0); // auto-refresh start om 21:00
+
+  // Eerste load
+  if (now >= firstLoadTime) {
+    loadMatches();
+  } else {
+    const delay = firstLoadTime - now;
+    setTimeout(loadMatches, delay);
+  }
+
+  // Auto-refresh pas vanaf 21:00
+  if (now >= refreshStartTime) {
+    setInterval(loadMatches, 60000);
+  } else {
+    const delayRefresh = refreshStartTime - now;
+    setTimeout(() => {
+      loadMatches();
+      setInterval(loadMatches, 60000);
+    }, delayRefresh);
+  }
+}
+
+// Start scheduler
+scheduleRefresh();
 </script>
+
 </body>
 </html>
-
