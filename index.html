@@ -60,101 +60,119 @@ h1 {
 <script>
 const API_KEY = "76505b8dd065466bad41dc42d86f9192";
 
-// Automatische datum van vandaag
-const today = new Date().toISOString().split("T")[0];
-const API_URL = `https://api.football-data.org/v4/matches?dateFrom=${today}&dateTo=${today}`;
+// Datum +/-1 dag rond vandaag voor zekerheid
+const today = new Date();
+const dateFrom = new Date(today); 
+dateFrom.setDate(today.getDate() - 1);
+const dateTo = new Date(today);
+dateTo.setDate(today.getDate() + 1);
+const API_URL = `https://api.football-data.org/v4/matches?dateFrom=${dateFrom.toISOString().split("T")[0]}&dateTo=${dateTo.toISOString().split("T")[0]}`;
 
 const scenarios = [
-  { home: "PSV", away: "Bayern Munich", type: "lose", team: "PSV" },
+  { home: "PSV Eindhoven", away: "FC Bayern München", type: "lose", team: "PSV Eindhoven" },
   { home: "Athletic Club", away: "Sporting CP", type: "lose", team: "Athletic Club" },
   { home: "Napoli", away: "Chelsea FC", type: "lose", team: "Napoli" },
   { home: "FC Copenhagen", away: "FC Barcelona", type: "lose", team: "FC Copenhagen" },
   { home: "Club Brugge", away: "Olympique Marseille", type: "notWin", team: "Club Brugge" },
-  { home: "Bodø/Glimt", away: "Atletico Madrid", type: "notWin", team: "Bodø/Glimt" },
+  { home: "Bodø/Glimt", away: "Atlético Madrid", type: "notWin", team: "Bodø/Glimt" },
   { home: "SL Benfica", away: "Real Madrid", type: "notWin", team: "SL Benfica" },
   { home: "Pafos FC", away: "Slavia Prague", type: "notWin", team: "Pafos FC" },
   { home: "Union Saint-Gilloise", away: "Atalanta", type: "notWin", team: "Union Saint-Gilloise" }
 ];
 
 async function loadMatches() {
-  const res = await fetch(API_URL, {
-    headers: { "X-Auth-Token": API_KEY }
-  });
-  const data = await res.json();
-  const container = document.getElementById("matches");
-  container.innerHTML = "";
+  try {
+    const res = await fetch(API_URL, {
+      headers: { "X-Auth-Token": API_KEY }
+    });
+    const data = await res.json();
+    const container = document.getElementById("matches");
+    container.innerHTML = "";
 
-  scenarios.forEach(s => {
-    const match = data.matches.find(m =>
-      m.homeTeam.name === s.home &&
-      m.awayTeam.name === s.away
-    );
-    if (!match) return;
+    scenarios.forEach(s => {
+      const match = data.matches.find(m =>
+        m.homeTeam.name === s.home &&
+        m.awayTeam.name === s.away
+      );
 
-    const homeGoals = match.score.fullTime.home;
-    const awayGoals = match.score.fullTime.away;
-
-    let statusText = "Nog niet gestart";
-    let className = "neutral";
-
-    if (homeGoals !== null && awayGoals !== null) {
-      let teamGoals, oppGoals;
-      if (s.team === match.homeTeam.name) {
-        teamGoals = homeGoals;
-        oppGoals = awayGoals;
-      } else {
-        teamGoals = awayGoals;
-        oppGoals = homeGoals;
+      if (!match) {
+        console.warn(`Wedstrijd niet gevonden: ${s.home} - ${s.away}`);
+        const div = document.createElement("div");
+        div.className = "match neutral";
+        div.innerHTML = `
+          <div class="teams">${s.home} – ${s.away}</div>
+          <div class="scenario">Scenario: ${s.team} ${s.type === "lose" ? "verliest" : "wint niet"}</div>
+          <div class="score">Wedstrijd niet gevonden</div>
+        `;
+        container.appendChild(div);
+        return;
       }
 
-      const success =
-        s.type === "lose"
-          ? teamGoals < oppGoals
-          : teamGoals <= oppGoals;
+      const homeGoals = match.score.fullTime.home;
+      const awayGoals = match.score.fullTime.away;
 
-      className = success ? "green" : "red";
-      statusText = `Stand: ${homeGoals} – ${awayGoals}`;
-    }
+      let statusText = "Nog niet gestart";
+      let className = "neutral";
 
-    const div = document.createElement("div");
-    div.className = `match ${className}`;
+      if (homeGoals !== null && awayGoals !== null) {
+        let teamGoals, oppGoals;
+        if (s.team === match.homeTeam.name) {
+          teamGoals = homeGoals;
+          oppGoals = awayGoals;
+        } else {
+          teamGoals = awayGoals;
+          oppGoals = homeGoals;
+        }
 
-    div.innerHTML = `
-      <div class="teams">${match.homeTeam.name} – ${match.awayTeam.name}</div>
-      <div class="scenario">Scenario: ${s.team} ${s.type === "lose" ? "verliest" : "wint niet"}</div>
-      <div class="score">${statusText}</div>
-      <div class="status">${match.status}</div>
-    `;
-    container.appendChild(div);
-  });
+        const success =
+          s.type === "lose"
+            ? teamGoals < oppGoals
+            : teamGoals <= oppGoals;
+
+        className = success ? "green" : "red";
+        statusText = `Stand: ${homeGoals} – ${awayGoals}`;
+      }
+
+      const div = document.createElement("div");
+      div.className = `match ${className}`;
+      div.innerHTML = `
+        <div class="teams">${match.homeTeam.name} – ${match.awayTeam.name}</div>
+        <div class="scenario">Scenario: ${s.team} ${s.type === "lose" ? "verliest" : "wint niet"}</div>
+        <div class="score">${statusText}</div>
+        <div class="status">${match.status}</div>
+      `;
+      container.appendChild(div);
+    });
+  } catch (err) {
+    console.error("Fout bij ophalen wedstrijden:", err);
+  }
 }
 
-// Functie voor automatische laadtijden
+// Scheduler: eerste load om 13:55, auto-refresh vanaf 21:00
 function scheduleRefresh() {
   const now = new Date();
-  const firstLoadTime = new Date();
-  firstLoadTime.setHours(13,30,0,0); // eerste load om 13:30
 
-  const refreshStartTime = new Date();
-  refreshStartTime.setHours(21,0,0,0); // auto-refresh start om 21:00
+  const firstLoad = new Date();
+  firstLoad.setHours(13,55,0,0);
+
+  const refreshStart = new Date();
+  refreshStart.setHours(21,0,0,0);
 
   // Eerste load
-  if (now >= firstLoadTime) {
+  if (now >= firstLoad) {
     loadMatches();
   } else {
-    const delay = firstLoadTime - now;
-    setTimeout(loadMatches, delay);
+    setTimeout(loadMatches, firstLoad - now);
   }
 
   // Auto-refresh pas vanaf 21:00
-  if (now >= refreshStartTime) {
+  if (now >= refreshStart) {
     setInterval(loadMatches, 60000);
   } else {
-    const delayRefresh = refreshStartTime - now;
     setTimeout(() => {
       loadMatches();
       setInterval(loadMatches, 60000);
-    }, delayRefresh);
+    }, refreshStart - now);
   }
 }
 
